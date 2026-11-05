@@ -15,6 +15,7 @@
  *
 */
 
+#include <deque>
 #include "ScheduleVisualizer.hpp"
 
 #include <rmf_traffic/geometry/Circle.hpp>
@@ -211,7 +212,18 @@ void ScheduleVisualizer::timer_callback()
   query_param.finish_time = query_param.start_time +
     std::chrono::seconds(_rviz_param->query_duration);
 
-  _elements = _schedule_data_node->get_elements(query_param);
+  std::deque<rmf_traffic::schedule::ParticipantDescription> descriptions;
+  std::vector<Element> elements;
+  {
+    std::lock_guard<std::mutex> lock(_schedule_data_node->get_mutex());
+    for (const auto& e : _schedule_data_node->get_elements(query_param))
+    {
+      descriptions.push_back(e.description);
+      elements.push_back(
+        Element{e.participant, e.plan_id, e.route_id, e.route,
+          descriptions.back()});
+    }
+  }
 
   RequestParam traj_param;
   traj_param.map_name = query_param.map_name;
@@ -225,7 +237,7 @@ void ScheduleVisualizer::timer_callback()
   // For each trajectory create two markers
   // 1) Current position
   // 2) Path until param.finish_time
-  for (const auto& element : _elements)
+  for (const auto& element : elements)
   {
     active_id.push_back(element.participant);
 
